@@ -51,6 +51,12 @@ shortbridge schedule list
 shortbridge --json schedule list
 ```
 
+Cancel a queued or failed job without deleting its downloaded source files:
+
+```console
+shortbridge schedule cancel JOB_ID
+```
+
 Publish one due item. The NixOS systemd timer runs this command automatically:
 
 ```console

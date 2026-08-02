@@ -49,7 +49,10 @@ class JobQueueTests(unittest.TestCase):
             now=self.now,
         )
 
-        self.assertEqual(job.scheduled_at.astimezone(ZoneInfo("Europe/Rome")).isoformat(), "2026-08-03T18:00:00+02:00")
+        self.assertEqual(
+            job.scheduled_at.astimezone(ZoneInfo("Europe/Rome")).isoformat(),
+            "2026-08-03T18:00:00+02:00",
+        )
         self.assertEqual(job.source_title, "Title")
         self.assertEqual(job.source_body, "Body")
         self.assertEqual(job.tiktok_caption, "Title\n\nBody")
@@ -68,7 +71,9 @@ class JobQueueTests(unittest.TestCase):
 
         second = self.queue.add(job_id="job-2", **arguments)
 
-        self.assertEqual(second.scheduled_at.astimezone(ZoneInfo("Europe/Rome")).date(), date(2026, 8, 4))
+        self.assertEqual(
+            second.scheduled_at.astimezone(ZoneInfo("Europe/Rome")).date(), date(2026, 8, 4)
+        )
 
     def test_add_does_not_choose_a_time_that_has_passed(self) -> None:
         after_six = datetime(2026, 8, 3, 18, 1, tzinfo=ZoneInfo("Europe/Rome"))
@@ -84,7 +89,9 @@ class JobQueueTests(unittest.TestCase):
             now=after_six,
         )
 
-        self.assertEqual(job.scheduled_at.astimezone(ZoneInfo("Europe/Rome")).date(), date(2026, 8, 4))
+        self.assertEqual(
+            job.scheduled_at.astimezone(ZoneInfo("Europe/Rome")).date(), date(2026, 8, 4)
+        )
 
     def test_caption_over_tiktok_limit_is_rejected_without_truncation(self) -> None:
         with self.assertRaisesRegex(QueueError, "2200"):
@@ -113,13 +120,17 @@ class JobQueueTests(unittest.TestCase):
             now=self.now,
         )
 
-        self.assertIsNone(self.queue.claim_due(now=datetime(2026, 8, 3, 15, 59, tzinfo=ZoneInfo("UTC"))))
+        self.assertIsNone(
+            self.queue.claim_due(now=datetime(2026, 8, 3, 15, 59, tzinfo=ZoneInfo("UTC")))
+        )
         claimed = self.queue.claim_due(now=datetime(2026, 8, 3, 16, 0, tzinfo=ZoneInfo("UTC")))
 
         self.assertIsNotNone(claimed)
         self.assertEqual(claimed.id, job.id)
         self.assertEqual(claimed.status, "publishing")
-        self.assertIsNone(self.queue.claim_due(now=datetime(2026, 8, 3, 16, 1, tzinfo=ZoneInfo("UTC"))))
+        self.assertIsNone(
+            self.queue.claim_due(now=datetime(2026, 8, 3, 16, 1, tzinfo=ZoneInfo("UTC")))
+        )
 
     def test_failed_job_preserves_actionable_error(self) -> None:
         self.queue.add(
@@ -140,6 +151,29 @@ class JobQueueTests(unittest.TestCase):
         self.assertIsNotNone(failed)
         self.assertEqual(failed.status, "failed")
         self.assertEqual(failed.last_error, "TikTok app audit is required")
+
+    def test_cancelled_job_frees_its_scheduled_day_without_deleting_media(self) -> None:
+        arguments = {
+            "metadata": youtube_metadata(),
+            "media_path": self.media_path,
+            "metadata_path": self.metadata_path,
+            "start_date": date(2026, 8, 3),
+            "timezone_name": "Europe/Rome",
+            "privacy_level": "PUBLIC_TO_EVERYONE",
+            "now": self.now,
+        }
+        self.queue.add(job_id="job-1", **arguments)
+
+        self.queue.cancel("job-1")
+        replacement = self.queue.add(job_id="job-2", **arguments)
+
+        cancelled = self.queue.get("job-1")
+        self.assertEqual(cancelled.status, "cancelled")
+        self.assertTrue(self.media_path.is_file())
+        self.assertEqual(
+            replacement.scheduled_at.astimezone(ZoneInfo("Europe/Rome")).date(),
+            date(2026, 8, 3),
+        )
 
 
 if __name__ == "__main__":

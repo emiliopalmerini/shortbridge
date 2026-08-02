@@ -157,7 +157,9 @@ class TokenProvider:
         if not new_access_token or not new_refresh_token:
             raise TikTokError("TikTok token response omitted access_token or refresh_token")
         saved_document = dict(document)
-        saved_document["access_expires_at"] = current_timestamp + int(document.get("expires_in") or 0)
+        saved_document["access_expires_at"] = current_timestamp + int(
+            document.get("expires_in") or 0
+        )
         saved_document["refresh_expires_at"] = current_timestamp + int(
             document.get("refresh_expires_in") or 0
         )
@@ -315,7 +317,7 @@ class TikTokClient:
             raise TikTokError(f"Could not stream scheduled video {media_path}: {exc}") from exc
 
     def _wait_until_published(self, publish_id: str) -> None:
-        for attempt in range(150):
+        for attempt in range(100):
             data = self._post(
                 "/v2/post/publish/status/fetch/",
                 {"publish_id": publish_id},
@@ -327,8 +329,8 @@ class TikTokClient:
             if status == "FAILED":
                 reason = data.get("fail_reason") or "TikTok returned no failure reason"
                 raise TikTokError(f"TikTok failed to publish {publish_id}: {reason}")
-            if attempt < 149:
-                self.sleep(2)
+            if attempt < 99:
+                self.sleep(3)
         raise TikTokError(
             f"TikTok is still processing publish ID {publish_id}; check its status before retrying"
         )

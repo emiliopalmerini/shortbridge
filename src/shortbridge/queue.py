@@ -256,6 +256,26 @@ class JobQueue:
         if cursor.rowcount != 1:
             raise QueueError(f"Job '{job_id}' is not currently publishing")
 
+    def cancel(self, job_id: str) -> None:
+        timestamp = datetime.now(UTC).isoformat()
+        with closing(self._connect()) as connection, connection:
+            cursor = connection.execute(
+                """
+                UPDATE jobs
+                SET status = 'cancelled', updated_at_utc = ?
+                WHERE id = ? AND status IN ('queued', 'failed')
+                """,
+                (timestamp, job_id),
+            )
+        if cursor.rowcount == 1:
+            return
+        existing = self.get(job_id)
+        if existing is None:
+            raise QueueError(f"Job '{job_id}' does not exist")
+        if existing.status == "cancelled":
+            return
+        raise QueueError(f"Job '{job_id}' cannot be cancelled while {existing.status}")
+
     @staticmethod
     def _row_to_job(row: sqlite3.Row) -> Job:
         return Job(

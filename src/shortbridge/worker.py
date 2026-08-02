@@ -44,7 +44,9 @@ def publish_next_due(
         try:
             queue.mark_failed(job.id, str(exc))
         except QueueError as state_error:
-            raise WorkerError(f"{exc}; additionally failed to save job state: {state_error}") from exc
+            raise WorkerError(
+                f"{exc}; additionally failed to save job state: {state_error}"
+            ) from exc
         raise WorkerError(str(exc)) from exc
 
     published = queue.get(job.id)

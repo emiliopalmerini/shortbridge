@@ -162,6 +162,52 @@ class CliTests(unittest.TestCase):
         self.assertTrue(json.loads(output)["credentials_configured"])
         self.assertEqual(stderr.getvalue(), "")
 
+    def test_schedule_cancel_preserves_files_and_reports_state(self) -> None:
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            home = Path(temporary_directory)
+            media_path = home / "video.mp4"
+            metadata_path = home / "video.info.json"
+            media_path.write_bytes(b"video")
+            metadata_path.write_text("{}")
+            queue = JobQueue(home / "queue.sqlite3")
+            queue.add(
+                job_id="job-1",
+                metadata=SourceMetadata(
+                    platform="youtube",
+                    source_id="source-1",
+                    source_url="https://youtu.be/source-1",
+                    title="Title",
+                    body="Body",
+                    duration_seconds=10,
+                    uploader="Channel",
+                    raw={},
+                ),
+                media_path=media_path,
+                metadata_path=metadata_path,
+                start_date=cli._parse_date("2099-01-02"),
+                timezone_name="Europe/Rome",
+                privacy_level="PUBLIC_TO_EVERYONE",
+            )
+
+            with patch.dict(os.environ, {"SHORTBRIDGE_HOME": str(home)}):
+                exit_code = main(
+                    ["--json", "schedule", "cancel", "job-1"],
+                    stdout=stdout,
+                    stderr=stderr,
+                )
+
+            cancelled = queue.get("job-1")
+            media_preserved = media_path.is_file()
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(json.loads(stdout.getvalue())["status"], "cancelled")
+        self.assertEqual(cancelled.status, "cancelled")
+        self.assertTrue(media_preserved)
+        self.assertEqual(stderr.getvalue(), "")
+
 
 if __name__ == "__main__":
     unittest.main()

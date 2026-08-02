@@ -110,6 +110,12 @@ def _build_parser(stdout: TextIO, stderr: TextIO) -> _ArgumentParser:
     schedule_commands.add_parser(
         "list", help="list all scheduled jobs", stdout=stdout, stderr=stderr
     )
+    schedule_cancel = schedule_commands.add_parser(
+        "cancel", help="cancel a queued or failed job", stdout=stdout, stderr=stderr
+    )
+    schedule_cancel.add_argument(
+        "job_id", metavar="JOB_ID", help="job identifier from schedule list"
+    )
 
     auth_parser = commands.add_parser(
         "auth", help="inspect or refresh TikTok authorization", stdout=stdout, stderr=stderr
@@ -121,7 +127,9 @@ def _build_parser(stdout: TextIO, stderr: TextIO) -> _ArgumentParser:
     auth_commands.add_parser(
         "refresh", help="refresh and verify TikTok authorization", stdout=stdout, stderr=stderr
     )
-    commands.add_parser("run-due", help="publish videos whose time has arrived", stdout=stdout, stderr=stderr)
+    commands.add_parser(
+        "run-due", help="publish videos whose time has arrived", stdout=stdout, stderr=stderr
+    )
     return parser
 
 
@@ -262,6 +270,16 @@ def _run_schedule_list(args: argparse.Namespace, *, stdout: TextIO) -> int:
     return 0
 
 
+def _run_schedule_cancel(args: argparse.Namespace, *, stdout: TextIO) -> int:
+    queue = JobQueue(AppPaths.discover().database)
+    queue.cancel(args.job_id)
+    job = queue.get(args.job_id)
+    if job is None:
+        raise QueueError(f"Job '{args.job_id}' disappeared after cancellation")
+    _write_document(_job_document(job), as_json=args.json, stdout=stdout)
+    return 0
+
+
 def _credentials_configured(paths: AppPaths) -> bool:
     names = ("tiktok_client_key", "tiktok_client_secret", "tiktok_refresh_token")
     return all((paths.credentials / name).is_file() for name in names)
@@ -332,6 +350,8 @@ def main(
             return _run_schedule_add(args, stdin=stdin, stdout=stdout, stderr=stderr)
         if args.command == "schedule" and args.schedule_command == "list":
             return _run_schedule_list(args, stdout=stdout)
+        if args.command == "schedule" and args.schedule_command == "cancel":
+            return _run_schedule_cancel(args, stdout=stdout)
         if args.command == "schedule":
             stderr.write("Choose a schedule command. Run 'shortbridge schedule --help'.\n")
             return 2
